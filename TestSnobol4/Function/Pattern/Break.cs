@@ -240,4 +240,23 @@ END
         Assert.AreEqual(69, build.ErrorCodeHistory[0]);
     }
 
+    [TestMethod]
+    public void TEST_Break_014()
+    {
+        var s = @"
+	SUB = 'EXCEPTIONS-ARE-AS-TRUE-AS-RULES'
+	P1 = POS(0) BREAK('A') . R2 'AS'
+	SUB P1    :S(Y)F(N)
+Y	R1 = 'SUCCESS' :(END)
+N	R1 = 'FAILURE'
+END
+";
+        var directives = "-b";
+        var build = SetupTests.SetupScript(directives, s);
+        Assert.AreEqual(0, build.ErrorCodeHistory.Count);
+        Assert.AreEqual("FAILURE", ((StringVar)build.Execute!.IdentifierTable["R1"]).Data);
+        Assert.AreEqual("", ((StringVar)build.Execute!.IdentifierTable["R2"]).Data);
+    }
+
+
 }
