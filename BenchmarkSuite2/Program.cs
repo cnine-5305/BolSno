@@ -1,5 +1,5 @@
 using System;
-using Snobol4.Benchmarks2;
+using BolSno.Benchmarks2;
 
 internal class Program
 {
@@ -8,7 +8,7 @@ internal class Program
 
     static void Main()
     {
-        Console.WriteLine($"SNOBOL4.NET Benchmark — {Reps} reps, {Warmup} warmup, Release build");
+        Console.WriteLine($"BolSno Benchmark — {Reps} reps, {Warmup} warmup, Release build");
         Console.WriteLine(new string('-', 74));
         Console.WriteLine($"{"Benchmark",-28} {"Mean",8} {"±",2} {"StdDev",8} {"Alloc/run",12}");
         Console.WriteLine(new string('-', 74));

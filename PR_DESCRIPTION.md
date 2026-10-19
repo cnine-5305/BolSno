@@ -4,7 +4,7 @@
 
 Replaces the Roslyn C#-codegen execution path with a custom threaded interpreter.
 
-Previously, SNOBOL4.NET compiled each program to C# source code at runtime,
+Previously, BolSno compiled each program to C# source code at runtime,
 invoked Roslyn to compile it to a DLL, loaded the DLL, and executed it.
 This worked correctly but Roslyn's compile time (25–100ms per program) dominated
 execution time for all short-to-medium programs.
@@ -44,10 +44,10 @@ Full benchmark history is in `BENCHMARKS.md`.
 ## What changed
 
 ### New files
-- `Snobol4.Common/Builder/Instruction.cs` — `OpCode` enum and `Instruction` struct (12-byte value type)
-- `Snobol4.Common/Builder/ThreadedCodeCompiler.cs` — compiles SNOBOL4 AST → `Instruction[]`
-- `Snobol4.Common/Runtime/Execution/ThreadedExecuteLoop.cs` — main dispatch loop
-- `Snobol4.Common/Runtime/Execution/ExecutionCache.cs` — `VarSlotArray` (O(1) variable access), pre-resolved operator handlers
+- `BolSno.Common/Builder/Instruction.cs` — `OpCode` enum and `Instruction` struct (12-byte value type)
+- `BolSno.Common/Builder/ThreadedCodeCompiler.cs` — compiles SNOBOL4 AST → `Instruction[]`
+- `BolSno.Common/Runtime/Execution/ThreadedExecuteLoop.cs` — main dispatch loop
+- `BolSno.Common/Runtime/Execution/ExecutionCache.cs` — `VarSlotArray` (O(1) variable access), pre-resolved operator handlers
 - `BENCHMARKS.md` — performance history
 - `REGRESSION.md` — full test results
 

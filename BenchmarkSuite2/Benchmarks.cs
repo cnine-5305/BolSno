@@ -1,4 +1,4 @@
-namespace Snobol4.Benchmarks2;
+namespace BolSno.Benchmarks2;
 
 /// <summary>
 /// SNOBOL4 benchmark scripts. Each constant is a complete SNOBOL4 program

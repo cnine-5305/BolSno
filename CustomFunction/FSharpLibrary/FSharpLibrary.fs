@@ -1,6 +1,6 @@
 namespace FSharpLibrary
 
-open Snobol4.Common
+open BolSno.Common
 open System.Collections.Generic
 
 /// Helper: call Var.Convert using mutable F# refs for the out params

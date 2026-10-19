@@ -1,0 +1,9 @@
+{
+  "profiles": {
+    "TestBolSno": {
+      "commandName": "Project",
+      "nativeDebugging": true,
+      "environmentVariables": {}
+    }
+  }
+}

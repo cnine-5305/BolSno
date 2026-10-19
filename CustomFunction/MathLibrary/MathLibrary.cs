@@ -1,4 +1,4 @@
-using Snobol4.Common;
+using BolSno.Common;
 
 namespace MathFunction;
 

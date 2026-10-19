@@ -2,7 +2,7 @@
 # test_smoke_dot_bridge.sh — smoke gate for S-2-bridge-1 (dormant bridge).
 #
 # Confirms:
-#   1. snobol4dotnet builds with MonitorIpc.cs present.
+#   1. BolSno builds with MonitorIpc.cs present.
 #   2. Beauty 17/17 still PASS (bridge has zero side effects when env
 #      vars unset).
 #   3. Setting MONITOR_BIN=1 alone (FIFOs absent) produces byte-identical
@@ -21,8 +21,8 @@
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-SNO4_REPO="${SNO4_REPO:-/home/claude/snobol4dotnet}"
-SNO4="${SNO4:-$SNO4_REPO/Snobol4/bin/Release/net10.0/Snobol4.dll}"
+SNO4_REPO="${SNO4_REPO:-/home/claude/BolSno}"
+SNO4="${SNO4:-$SNO4_REPO/BolSno/bin/Release/net10.0/BolSno.dll}"
 CORPUS="${CORPUS:-/home/claude/corpus}"
 BEAUTY="${BEAUTY:-$CORPUS/programs/snobol4/beauty}"
 

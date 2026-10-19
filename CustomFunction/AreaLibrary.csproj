@@ -24,7 +24,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Snobol4.Common\Snobol4.Common.csproj">
+    <ProjectReference Include="..\BolSno.Common\BolSno.Common.csproj">
       <Private>True</Private>
     </ProjectReference>
   </ItemGroup>

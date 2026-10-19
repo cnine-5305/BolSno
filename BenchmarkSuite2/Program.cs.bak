@@ -1,8 +1,8 @@
 using System;
-using Snobol4.Benchmarks2;
+using BolSno.Benchmarks2;
 
 /// <summary>
-/// BenchmarkSuite2 — end-to-end Stopwatch benchmarks for SNOBOL4.NET.
+/// BenchmarkSuite2 — end-to-end Stopwatch benchmarks for BolSno.
 ///
 /// Runs five SNOBOL4 programs (defined in Benchmarks.cs) 20 times each
 /// with 3 warmup runs, reporting mean, stddev, and allocation per run.
@@ -19,7 +19,7 @@ internal class Program
 
     static void Main()
     {
-        Console.WriteLine($"SNOBOL4.NET Benchmark — {Reps} reps, {Warmup} warmup runs, Release build");
+        Console.WriteLine($"BolSno Benchmark — {Reps} reps, {Warmup} warmup runs, Release build");
         Console.WriteLine(new string('-', 74));
         Console.WriteLine($"{"Benchmark",-28} {"Mean",8} {"±",2} {"StdDev",8} {"Alloc/run",12}");
         Console.WriteLine(new string('-', 74));

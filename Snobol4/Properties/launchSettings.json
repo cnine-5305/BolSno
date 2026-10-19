@@ -1,8 +1,0 @@
-{
-  "profiles": {
-    "Snobol4": {
-      "commandName": "Project",
-      "commandLineArgs": "-x -c \"C:\\Users\\jcooper\\Documents\\Visual Studio 2026\\SNOBOL4-dotnet\\TestSnobol4\\1brc.sno\""
-    }
-  }
-}

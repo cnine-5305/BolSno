@@ -1,11 +1,11 @@
 // benchmarks/Program.cs
 //
-// SNOBOL4.NET Benchmark Runner — loads .sno programs from snobol4ever/corpus.
+// BolSno Benchmark Runner — loads .sno programs from snobol4ever/corpus.
 //
 // Programs live in:  corpus/benchmarks/snobol4/*.sno  (or the folder CORPUS names)
 //
 // Run with:
-//   cd snobol4dotnet
+//   cd BolSno
 //   export PATH=$PATH:/usr/local/dotnet
 //   dotnet run --project benchmarks/Benchmarks.csproj -c Release
 
@@ -15,7 +15,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text;
-using Snobol4.Common;
+using BolSno.Common;
 
 // ── Locate corpus ─────────────────────────────────────────────────────────────
 
@@ -42,7 +42,7 @@ static string FindCorpus()
     }
     throw new DirectoryNotFoundException(
         "Cannot find corpus/benchmarks/snobol4/ above the runner — clone snobol4ever/corpus beside\n" +
-        "snobol4dotnet, or set CORPUS to the folder that holds the benchmark .sno programs.");
+        "BolSno, or set CORPUS to the folder that holds the benchmark .sno programs.");
 }
 
 string benchDir = FindCorpus();
@@ -109,7 +109,7 @@ static (double mean, double stddev, long allocBytes) Measure(string src, int rep
 
 // ── Header ────────────────────────────────────────────────────────────────────
 
-Console.WriteLine($"SNOBOL4.NET Benchmark Runner");
+Console.WriteLine($"BolSno Benchmark Runner");
 Console.WriteLine($"Programs: {benchDir}");
 Console.WriteLine(new string('-', 76));
 Console.WriteLine($"{"Benchmark",-30} {"Mean",8} {"±",2} {"StdDev",8} {"Alloc/run",12}  Result");

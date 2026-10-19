@@ -1,0 +1,373 @@
+﻿using System.Diagnostics;
+using System.Globalization;
+
+namespace BolSno.Common;
+
+public partial class Executive
+{
+    public const int GotoNotFound = -10;
+
+    public bool Failure;
+    // The stack position of the value that began the statement's current failure (a FRETURN, a failed
+    // predicate, an error); ~ flips only a failure that began inside its own operand. int.MaxValue
+    // when unknown, which lets ~ flip as before
+    internal int FailureOrigin = int.MaxValue;
+    /// <summary>Set by ThreadedExecuteLoop before restoring Failure, so
+    /// RunExpressionThread can re-apply the sub-expression's failure result.</summary>
+    internal bool LastExpressionFailure;
+    public Builder Parent;
+    public List<long> SourceLineNumbers;
+    public List<long> SourceListingNumbers;
+    public List<long> SourceStatementNumbers;
+    public List<string> SourceCode;
+    public List<string> SourceFiles;
+    /// <summary>
+    /// Per-statement precomputed wire-emission STNO, parallel to SourceCode.
+    /// Indexed by global stmtIdx (the same index baked into MSIL InitStatement
+    /// calls and OpCode.Init operands). Computed once at build time as
+    /// (stmtIdx + 1 + BlankLineCount-at-build-time) and never mutated, so
+    /// runtime EVAL/CODE swapping out Parent.Code cannot corrupt the
+    /// LABEL stno emitted by EmitLabel — see GOAL-NET-BEAUTY-SELF
+    /// S-2-bridge-7-fullscan, session #58.
+    /// </summary>
+    public List<long> SourceStno;
+    public SystemStack SystemStack;
+    public List<DeferredCode> StarFunctionList;
+
+    // The variable each simple deferred expression (*X) defers, which prtvl prints as *X
+    internal readonly Dictionary<DeferredCode, string> SimpleExpressionNames = [];
+    public int PreviousStarFunctionCount;
+    public delegate int StatementCode(Executive x);
+    public delegate void DeferredCode(Executive x);
+    public List<StatementCode> Statements;
+    internal Stack<string> ProgramDefinedFunctionStack = [];
+
+    // Threaded execution (Phase 3+)
+    internal Instruction[]? Thread;
+    internal int InstructionPointer;
+    internal int ErrorJump;
+
+    /// <summary>
+    /// Reusable argument list for OperatorFast — avoids per-call List allocation.
+    /// Cleared and refilled before every use. Must not be retained across calls.
+    /// </summary>
+    internal readonly List<Var> _reusableArgList = new(8);
+
+    // Symbol Tables
+    public FunctionTable FunctionTable;
+    public IdentifierTable IdentifierTable;
+    public LabelTable LabelTable;
+    public UserFunctionTable UserFunctionTable;
+
+    internal Stack<bool> FailureStack;
+    internal string ReturnType;
+    internal Stack<NameListEntry> AlphaStack;     // Stack for conditional variable assignment
+    internal Stack<NameListEntry> BetaStack;      // Stack for conditional variable assignment
+    internal List<ArrayVar> IndexedArrays;
+    internal List<TableVar> IndexedTables;
+
+    internal readonly Stopwatch _timerExecute; // Timer for statistics
+
+    // Map of channel names to streams. A stream is either
+    // a StreamReader or a StreamWriter, but not both.
+    internal Dictionary<string, Stream> StreamInputs;
+    internal Dictionary<string, Stream> StreamOutputs;
+    internal Dictionary<string, StreamReader> StreamReadersBySymbol;
+    internal Dictionary<string, StreamReader> StreamReadersByChannel;
+
+    // Each traced name maps to its trace function, or to null for a printed trace
+    internal Dictionary<string, TraceHandler?> TraceTableIdentifierAccess;
+    internal Dictionary<string, TraceHandler?> TraceTableIdentifierValue;
+    internal Dictionary<string, TraceHandler?> TraceTableIdentifierKeyword;
+    internal Dictionary<string, TraceHandler?> TraceTableLabel;
+    internal Dictionary<string, TraceHandler?> TraceTableFunctionCall;
+    internal Dictionary<string, TraceHandler?> TraceTableFunctionReturn;
+
+    internal Dictionary<string, long> ProfileTotal;
+    internal Dictionary<string, long> ProfileCount;
+
+    // SPITBOL numbers arrays, tables and DATA objects as it creates them (idval), and DUMP prints the
+    // number; one program runs on one thread, so the count is per thread and starts again per program
+    [ThreadStatic] private static long _blockCounter;
+    internal static long NewBlockId() => ++_blockCounter;
+
+    public Executive(Builder parent)
+    {
+        _blockCounter = 0;
+        Parent = parent;
+        Statements = [];
+        AlphaStack = [];
+        BetaStack = [];
+        IndexedArrays = [];
+        IndexedTables = [];
+        _timerExecute = new Stopwatch();
+        FailureStack = [];
+        StreamInputs = [];
+        LabelTable = new LabelTable(this);
+        UserFunctionTable = new UserFunctionTable(this);
+        StreamOutputs = [];
+        ReturnType = "";
+        SourceCode = [];
+        SourceFiles = [];
+        SourceLineNumbers = [];
+        SourceListingNumbers = [];
+        SourceStatementNumbers = [];
+        SourceStno = [];
+        SystemStack = [];
+        StarFunctionList = [];
+        StreamReadersBySymbol = [];  // Dictionary associating labels to line numbers
+        StreamReadersByChannel = [];  // Dictionary associating labels to line numbers;
+
+        AmpReturnType = "";
+        AmpOutput = 1;
+
+        TraceTableIdentifierAccess = [];
+        TraceTableIdentifierKeyword = [];
+        TraceTableIdentifierValue = [];
+        TraceTableLabel = [];
+        TraceTableFunctionCall = [];
+        TraceTableFunctionReturn = [];
+
+        ProfileCount = [];
+        ProfileTotal = [];
+
+        FunctionTable = new FunctionTable(this)
+        {
+            { "__-", new FunctionTableEntry(this, "__-", Subtract, 2, true) },
+            { "__#", new FunctionTableEntry(this, "__#", Undefined, 2, false) },
+            { "__$", new FunctionTableEntry(this, "__$", CreateImmediateVariableAssociationPattern, 2, true) },
+            { "__%", new FunctionTableEntry(this, "__%", Undefined, 2, false) },
+            { "__&", new FunctionTableEntry(this, "__&", Undefined, 2, false) },
+            { "__*", new FunctionTableEntry(this, "__*", Multiply, 2, true) },
+            { "__.", new FunctionTableEntry(this, "__.", CreateConditionalVariableAssociationPattern, 2, true) },
+            { "__/", new FunctionTableEntry(this, "__/", Divide, 2, true) },
+            { "__?", new FunctionTableEntry(this, "__?", PatternMatch, 2, true) },
+            { "__@", new FunctionTableEntry(this, "__@", Undefined, 2, false) },
+            { "__^", new FunctionTableEntry(this, "__^", Power, 2, true) },
+            { "__|", new FunctionTableEntry(this, "__|", CreateAlternatePattern, 2, true) },
+            { "__~", new FunctionTableEntry(this, "__~", PatternAnnotation, 2, false) },
+            { "__+", new FunctionTableEntry(this, "__+", Add, 2, true) },
+            { "___", new FunctionTableEntry(this, "___", CreateConcatenatePattern, 2, true) },
+
+            { "_-", new FunctionTableEntry(this, "_-", UnaryMinus, 1, true) },
+            { "_!", new FunctionTableEntry(this, "_!", Undefined, 1, false) },
+            { "_#", new FunctionTableEntry(this, "_#", Undefined, 1, false) },
+            { "_$", new FunctionTableEntry(this, "_$", Indirection, 1, true) },
+            { "_%", new FunctionTableEntry(this, "_%", Undefined, 1, false) },
+            { "_&", new FunctionTableEntry(this, "_&", Ampersand, 1, true) },
+            { "_.", new FunctionTableEntry(this, "_.", Name, 1, true) },
+            { "_/", new FunctionTableEntry(this, "_/", Undefined, 1, false) },
+            { "_?", new FunctionTableEntry(this, "_?", Interrogation, 0, true) },
+            { "_@", new FunctionTableEntry(this, "_@", CreateAtPattern, 1, true) },
+            { "_|", new FunctionTableEntry(this, "_|", Undefined, 1, false) },
+            { "_~", new FunctionTableEntry(this, "_~", Negation, 0, true) },
+            { "_+", new FunctionTableEntry(this, "_+", UnaryPlus, 1, true) },
+            { "_=", new FunctionTableEntry(this, "_=", Undefined, 1, false) },
+
+
+            { "ANY", new FunctionTableEntry(this, "any", CreateAnyPattern, 1,true)},
+            { "APPLY", new FunctionTableEntry(this, "apply", Apply, -1,true)},
+            { "ARBNO", new FunctionTableEntry(this, "arbno", CreateArbNoPattern, 1,true)},
+            { "ARRAY", new FunctionTableEntry(this, "array", CreateArray, 2,  true)},
+            { "ARG", new FunctionTableEntry(this, "arg", Arg, 2,true)},
+            { "ATAN", new FunctionTableEntry(this, "atan", Atan, 1,  true) },
+            { "BACKSPACE", new FunctionTableEntry(this, "backspace", BackspaceFile, 1,  true) },
+            { "BREAK", new FunctionTableEntry(this, "break", CreateBreakPattern, 1,true)},
+            { "BREAKX", new FunctionTableEntry(this, "breakx", CreateBreakXPattern, 1,true)},
+            { "CHAR", new FunctionTableEntry(this, "char", Char, 1,  true) },
+            { "ORD", new FunctionTableEntry(this, "ord", Ord, 1,  true) },
+            { "CHOP", new FunctionTableEntry(this, "chop", Chop, 1,  true) },
+            { "CLEAR", new FunctionTableEntry(this, "clear", ReinitializeVariables, 1,  true)},
+            { "CODE", new FunctionTableEntry(this, "code", CreateCode, 1,  true)},
+            { "COPY", new FunctionTableEntry(this, "copy", Copy, 1,  true)},
+            { "COLLECT", new FunctionTableEntry(this, "collect", GarbageCollect, 1,  true)},
+            { "CONCAT", new FunctionTableEntry(this, "concat", CreateConcatenatePattern,2,  false)},   // not SPITBOL's: redefinable
+            { "CONVERT", new FunctionTableEntry(this, "convert", Convert, 2,true)},
+            { "COS", new FunctionTableEntry(this, "cos", Cos, 1,  true) },
+            { "DATA", new FunctionTableEntry(this, "data", ProgramDefinedData, 1,  true)},
+            { "DATE", new FunctionTableEntry(this, "date", Date, 0,  true)},
+            { "DATATYPE", new FunctionTableEntry(this, "datatype", DataType, 1,true)},
+            { "DEFINE", new FunctionTableEntry(this, "define", CreateProgramDefinedFunction, 2,  true)},
+            { "DETACH", new FunctionTableEntry(this, "detach", Detach, 1,  true)},
+            { "DIFFER", new FunctionTableEntry(this, "differ", Differ, 2,  true)},
+            { "DUMP", new FunctionTableEntry(this, "dump", DisplayVariableValues, 2,  true)},
+            { "DUPL", new FunctionTableEntry(this, "dupl", Duplicate, 2,  true)},
+            { "EJECT", new FunctionTableEntry(this, "eject", EjectFile, 1,  true)},
+            { "ENDFILE", new FunctionTableEntry(this, "endfile", EndFile, 1,  true)},
+            { "EQ", new FunctionTableEntry(this, "eq", Eq, 2,  true) },
+            { "EVAL", new FunctionTableEntry(this, "eval", Eval, 1,true)},
+            { "EXIT", new FunctionTableEntry(this, "exit", Exit, 1,  true) },
+            { "EXP", new FunctionTableEntry(this, "exp", Exp, 1,  true) },
+            { "FENCE", new FunctionTableEntry(this, "fence",CreateFenceFunction, 1,true)},
+            { "FIELD", new FunctionTableEntry(this, "field", Field, 2,true)},
+            { "GE", new FunctionTableEntry(this, "ge", Ge, 2,  true) },
+            { "GT", new FunctionTableEntry(this, "gt", Gt, 2,  true) },
+            { "HOST", new FunctionTableEntry(this, "host", Host, 2,  true) },
+            { "IDENT", new FunctionTableEntry(this, "ident", Ident, 2,  true) },
+            { "INPUT", new FunctionTableEntry(this, "input", InputFileOpen, 5,  true)},
+            { "INTEGER", new FunctionTableEntry(this, "integer", Integer, 1,  true)},
+            { "ITEM", new FunctionTableEntry(this, "item", Item, -1,  true)},
+            { "LE", new FunctionTableEntry(this, "le", Le, 2,  true) },
+            { "LEN", new FunctionTableEntry(this, "len", CreateLenPattern, 1,true)},
+            { "LN", new FunctionTableEntry(this, "ln", Ln, 1,  true) },
+            { "LOAD", new FunctionTableEntry(this, "load", LoadExternalFunction, 2,  true) },
+            { "LOCAL", new FunctionTableEntry(this, "local", Local, 2,true)},
+            { "LPAD", new FunctionTableEntry(this, "lpad", PadLeft, 3,true)},
+            { "LT", new FunctionTableEntry(this, "lt", Lt, 2,  true) },
+            { "NE", new FunctionTableEntry(this, "ne", Ne, 2,  true) },
+            { "LEQ", new FunctionTableEntry(this, "leq", LexicalEqual, 2,  true) },
+            { "LGE", new FunctionTableEntry(this, "lge", LexicalGreaterThanOrEqual, 2,  true) },
+            { "LGT", new FunctionTableEntry(this, "lgt", LexicalGreaterThan, 2,  true) },
+            { "LLE", new FunctionTableEntry(this, "lle", LexicalLessThanOrEqual, 2,  true) },
+            { "LLT", new FunctionTableEntry(this, "llt", LexicalLessThan, 2,  true) },
+            { "LNE", new FunctionTableEntry(this, "lne", LexicalNotEqual, 2,  true) },
+            { "NOTANY", new FunctionTableEntry(this, "notany", CreateNotAnyPattern, 1,true)},
+            { "OPSYN", new FunctionTableEntry(this, "opsyn", OperatorSynonym, 3,  true) },
+            { "OUTPUT", new FunctionTableEntry(this, "output", OutputFileOpen, 6,  true) },
+            { "PROTOTYPE", new FunctionTableEntry(this, "prototype", Prototype, 1,true)},
+            { "POS", new FunctionTableEntry(this, "pos", CreatePosPattern, 1,true)},
+            { "REMDR", new FunctionTableEntry(this, "remdr", Remainder, 2,  true) },
+            { "REPLACE", new FunctionTableEntry(this, "replace", Replace, 3,  true) },
+            { "REVERSE", new FunctionTableEntry(this, "reverse", Reverse, 1,  true)},
+            { "REWIND", new FunctionTableEntry(this, "rewind", Rewind, 1,  true)},
+            { "RPOS", new FunctionTableEntry(this, "rpos", CreateRPosPattern, 1,true)},
+            { "RSORT", new FunctionTableEntry(this, "rsort", ReverseSort, 2,true)},
+            { "RPAD", new FunctionTableEntry(this, "rpad", PadRight, 3,true)},
+            { "RTAB", new FunctionTableEntry(this, "rtab", CreateRTabPattern, 1,true)},
+            { "SET", new FunctionTableEntry(this, "set", Set, 3, true)},
+            { "SETEXIT", new FunctionTableEntry(this, "setexit", SetExit, 1, true)},
+            { "SIN", new FunctionTableEntry(this, "sin", Sin, 1,  true) },
+            { "SIZE", new FunctionTableEntry(this, "size", Size, 1,true)},
+            { "VALUE", new FunctionTableEntry(this, "value", Value, 1, false)},   // not SPITBOL's: redefinable
+            { "SORT", new FunctionTableEntry(this, "sort", Sort, 2,true)},
+            { "SPAN", new FunctionTableEntry(this, "span", CreateSpanPattern, 1,true)},
+            { "SQRT", new FunctionTableEntry(this, "sqrt", Sqrt, 1,  true) },
+            { "STOPTR", new FunctionTableEntry(this, "stoptr", StopTrace, 2,  true) },
+            { "SUBSTR", new FunctionTableEntry(this, "substr", Substring, 3,true)},
+            { "TAB", new FunctionTableEntry(this, "tab", CreateTabPattern, 1,true)},
+            { "TABLE", new FunctionTableEntry(this, "table", CreateTable, 3,  true)},
+            { "TAN", new FunctionTableEntry(this, "tan", Tan, 1,true)},
+            { "TIME", new FunctionTableEntry(this, "time", Time, 0, true)},
+            { "TRACE", new FunctionTableEntry(this, "trace", Trace, 4, true)},
+            { "TRIM", new FunctionTableEntry(this, "trim", Trim, 1, true)},
+            { "UNLOAD", new FunctionTableEntry(this, "unload", UnloadExternalFunction, 1,  true) }
+        };
+
+        var alphabet = Enumerable.Range(0, 256).Select(i => (char)i).ToArray();
+        AmpAlphabet = "";
+        foreach (var letter in alphabet)
+            AmpAlphabet += letter;
+        // SPITBOL MINIMAL: &lcase and &ucase are exactly 26 ASCII letters (sbl.min: lcase/ucase dac 26)
+        AmpLowerCaseLetters = "abcdefghijklmnopqrstuvwxyz";
+        AmpUpperCaseLetters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+
+        // SPITBOL's predefined pattern variables: ABORT, ARB, BAL, FAIL, FENCE, REM, SUCCEED.
+        // NULL is not one of them: it is an ordinary variable whose value is the null string.
+        IdentifierTable = new IdentifierTable(this)
+        {
+            // The predefined names are upper case only: under -f a lower-case arb or output is an
+            // ordinary variable, as in SPITBOL (sbl -bf); under folding no lower-case name reaches here
+            {"ABORT", new PatternVar(new AbortPattern(), "ABORT", false, true)},
+            {"ARB", new PatternVar(ArbPattern.Structure(), "ARB", false, true)},
+            {"BAL", new PatternVar(BalPattern.Structure(), "BAL", false, true)},
+            {"FAIL", new PatternVar(new FailPattern(), "FAIL", false, true)},
+            {"FENCE", new PatternVar(new AlternatePattern(new NullPattern(), new AbortPattern()), "FENCE", false, true)},
+            {"INPUT", new StringVar("","INPUT")},
+            {"OUTPUT", new StringVar("","OUTPUT")},
+            {"REM", new PatternVar(new RemPattern(), "REM", false, true)},
+            {"SUCCEED", new PatternVar(new SucceedPattern(), "SUCCEED", false, true)},
+            {"TERMINAL", new StringVar("", "TERMINAL")}
+        };
+
+        KeywordTable = new()
+        {
+            // Protected keywords
+
+            { "&ABORT", HandleAbort },
+            { "&ALPHABET", HandleAlphabet },
+            { "&ARB", HandleArb },
+            { "&BAL", HandleBal },
+            { "&FAIL", HandleFail },
+            { "&FENCE", HandleFence },
+            { "&FILE", HandleFile },
+            { "&FNCLEVEL", HandleFncLevel },
+            { "&LASTFILE", HandleLastFile },
+            { "&LASTLINE", HandleLastLine },
+            { "&LASTNO", HandleLastNo },
+            { "&LCASE", HandleLCase },
+            { "&LINE", HandleLine },
+            { "&REM", HandleRem },
+            { "&RTNTYPE", HandleRtnType },
+            { "&STCOUNT", HandleStCount },
+            { "&STNO", HandleStNo },
+            { "&SUCCEED", HandleSucceed },
+            { "&UCASE", HandleUCase },
+            { "&abort", HandleAbort },
+            { "&alphabet", HandleAlphabet },
+            { "&arb", HandleArb },
+            { "&bal", HandleBal },
+            { "&fail", HandleFail },
+            { "&fence", HandleFence },
+            { "&file", HandleFile },
+            { "&fnclevel", HandleFncLevel },
+            { "&lastfile", HandleLastFile },
+            { "&lastline", HandleLastLine },
+            { "&lastno", HandleLastNo },
+            { "&lcase", HandleLCase },
+            { "&line", HandleLine },
+            { "&rem", HandleRem },
+            { "&rtntype", HandleRtnType },
+            { "&stcount", HandleStCount },
+            { "&stno", HandleStNo },
+            { "&succeed", HandleSucceed },
+            { "&ucase", HandleUCase },
+
+            // Unprotected keywords
+
+            { "&ABEND", HandleAbend },
+            { "&ANCHOR", HandleAnchor },
+            { "&CASE", HandleCase },
+            { "&CODE", HandleCode },
+            { "&COMPARE", HandleCompare },
+            { "&DUMP", HandleDump },
+            { "&ERRLIMIT", HandleErrLimit },
+            { "&ERRTEXT", HandleErrText },
+            { "&ERRTYPE", HandleErrType },
+            { "&FTRACE", HandleFTrace },
+            { "&FULLSCAN", HandleFullScan },
+            { "&INPUT", HandleInput },
+            { "&MAXLNGTH", HandleMaxLength },
+            { "&OUTPUT", HandleOutput },
+            { "&PROFILE", HandleProfile },
+            { "&STLIMIT", HandleStatementLimit },
+            { "&TRACE", HandleTrace },
+            { "&TRIM", HandleTrim },
+            { "&abend", HandleAbend },
+            { "&anchor", HandleAnchor },
+            { "&case", HandleCase },
+            { "&code", HandleCode },
+            { "&compare", HandleCompare },
+            { "&dump", HandleDump },
+            { "&errlimit", HandleErrLimit },
+            { "&errtext", HandleErrText },
+            { "&errtype", HandleErrType },
+            { "&ftrace", HandleFTrace },
+            { "&fullscan", HandleFullScan },
+            { "&input", HandleInput },
+            { "&maxlngth", HandleMaxLength },
+            { "&output", HandleOutput },
+            { "&profile", HandleProfile },
+            { "&stlimit", HandleStatementLimit },
+            { "&trace", HandleTrace },
+            { "&trim", HandleTrim },
+        };
+
+        IdentifierTable["OUTPUT"].OutputChannel = "+console-output";
+        IdentifierTable["TERMINAL"].OutputChannel = "+terminal-output";
+        IdentifierTable["INPUT"].InputChannel = "+console-input";
+        IdentifierTable["TERMINAL"].InputChannel = "+terminal-input";
+
+        // xncbp: fire any unfired shutdown callbacks when the process exits.
+        AppDomain.CurrentDomain.ProcessExit += (_, _) => FireAllNativeCallbacks();
+    }
+}

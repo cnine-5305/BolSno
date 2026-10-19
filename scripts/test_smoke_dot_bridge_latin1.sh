@@ -14,8 +14,8 @@
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-SNO4_REPO="${SNO4_REPO:-/home/claude/snobol4dotnet}"
-SNO4="${SNO4:-$SNO4_REPO/Snobol4/bin/Release/net10.0/Snobol4.dll}"
+SNO4_REPO="${SNO4_REPO:-/home/claude/BolSno}"
+SNO4="${SNO4:-$SNO4_REPO/BolSno/bin/Release/net10.0/BolSno.dll}"
 READER="${READER:-/home/claude/one4all/scripts/monitor/read_one_wire.py}"
 
 if ! command -v dotnet >/dev/null 2>&1; then

@@ -1,4 +1,4 @@
-# Building snobol4dotnet
+# Building BolSno
 
 ## Prerequisites
 
@@ -20,11 +20,11 @@
 ## Quick Start
 
 ```bash
-git clone https://github.com/snobol4ever/snobol4dotnet
-cd snobol4dotnet
+git clone https://github.com/snobol4ever/snobol4dotnet BolSno
+cd BolSno
 
-dotnet build Snobol4.sln -c Release -p:EnableWindowsTargeting=true
-dotnet test TestSnobol4/TestSnobol4.csproj -c Release -p:EnableWindowsTargeting=true
+dotnet build BolSno.sln -c Release -p:EnableWindowsTargeting=true
+dotnet test TestBolSno/TestBolSno.csproj -c Release -p:EnableWindowsTargeting=true
 ```
 
 **Always pass `-p:EnableWindowsTargeting=true` on Linux** — the project targets
@@ -58,7 +58,7 @@ bash build_native.sh
 # Wall-clock runner (no BenchmarkDotNet dependency)
 dotnet run --project benchmarks/Benchmarks.csproj -c Release
 
-# Requires snobol4corpus alongside snobol4dotnet:
+# Requires snobol4corpus alongside BolSno:
 #   git clone https://github.com/snobol4ever/snobol4corpus ../snobol4corpus
 # Or set CORPUS env var:
 CORPUS=/path/to/snobol4corpus/benchmarks \
@@ -68,10 +68,10 @@ CORPUS=/path/to/snobol4corpus/benchmarks \
 ## Project Layout
 
 ```
-Snobol4.sln                  — solution (all projects)
-Snobol4/                     — main runtime (Executive, Builder, patterns)
-Snobol4.Common/              — shared types (Var hierarchy, strategies)
-TestSnobol4/                 — xUnit test suite (~1876 tests)
+BolSno.sln                  — solution (all projects)
+BolSno/                     — main runtime (Executive, Builder, patterns)
+BolSno.Common/              — shared types (Var hierarchy, strategies)
+TestBolSno/                 — xUnit test suite (~1876 tests)
 benchmarks/                  — wall-clock benchmark runner
 CustomFunction/              — native + managed external function fixtures
 perf/                        — baseline.md + profile docs

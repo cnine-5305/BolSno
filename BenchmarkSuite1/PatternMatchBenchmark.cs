@@ -1,8 +1,8 @@
 using BenchmarkDotNet.Attributes;
-using Snobol4.Common;
+using BolSno.Common;
 using Microsoft.VSDiagnostics;
 
-namespace Snobol4.Benchmarks;
+namespace BolSno.Benchmarks;
 [CPUUsageDiagnoser]
 public class PatternMatchBenchmark
 {

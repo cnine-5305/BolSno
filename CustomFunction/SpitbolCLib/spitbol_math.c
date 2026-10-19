@@ -12,7 +12,7 @@
  * the simpler "return value in register" C ABI that the DOTNET wrapper will use.
  * 
  *  cl.exe /nologo /Od /Zi /MDd /D_DEBUG /Fe:libspitbol_math.dll spitbol_math.c /link /DLL /MACHINE:X64 /DEBUG /PDB:libspitbol_math.pdb
- * cd "C:\Users\jcooper\Documents\Visual Studio 2026\snobol4dotnet-main"
+ * cd "C:\Users\jcooper\Documents\Visual Studio 2026\BolSno"
  * .\build_native.ps1
  */
 

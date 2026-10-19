@@ -4,9 +4,9 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text;
-using Snobol4.Common;
+using BolSno.Common;
 
-namespace Snobol4.Benchmarks2;
+namespace BolSno.Benchmarks2;
 
 /// <summary>
 /// Runs a SNOBOL4 script through the full Builder pipeline and returns the

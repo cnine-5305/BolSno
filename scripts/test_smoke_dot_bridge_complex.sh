@@ -17,7 +17,7 @@
 # only — same shape as csn-bridge-a + csn-bridge-c minus the CALL/RETURN
 # records around *fn invocations.)
 #
-# Discovery (2026-04-27): snobol4dotnet's pattern-match commit walks
+# Discovery (2026-04-27): BolSno's pattern-match commit walks
 # BetaStack and calls Executive.Assign() per nameListEntry — i.e. it
 # routes .-capture and $-capture through the same chokepoint as plain
 # = stores.  So S-2-bridge-2's single fire-point already covers all
@@ -29,8 +29,8 @@
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-SNO4_REPO="${SNO4_REPO:-/home/claude/snobol4dotnet}"
-SNO4="${SNO4:-$SNO4_REPO/Snobol4/bin/Release/net10.0/Snobol4.dll}"
+SNO4_REPO="${SNO4_REPO:-/home/claude/BolSno}"
+SNO4="${SNO4:-$SNO4_REPO/BolSno/bin/Release/net10.0/BolSno.dll}"
 READER="${READER:-/home/claude/one4all/scripts/monitor/read_one_wire.py}"
 
 if ! command -v dotnet >/dev/null 2>&1; then

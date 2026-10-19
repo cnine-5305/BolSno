@@ -1,0 +1,279 @@
+﻿#pragma warning disable CS8770 // Method lacks `[DoesNotReturn]` annotation to match implemented or overridden member.
+using System.Diagnostics;
+
+#pragma warning disable IDE0130
+namespace BolSno.Common;
+#pragma warning restore IDE0130
+
+[DebuggerDisplay("{FormattingStrategy.DebugVar(this)}")]
+public sealed class ArrayVar : Var
+{
+    #region Data
+
+    // SPITBOL's idval: the creation number DUMP prints (ARRAY(3) #2); 0 until the array is given one
+    internal long BlockId;
+    // the DATA object whose fields this array holds, so DUMP can name a field (VAL(N))
+    internal ProgramDefinedDataVar? DataOwner;
+    internal List<long> Sizes { get; } = [];
+    internal List<Var> Data { get; private set; } = [];
+    internal long Dimensions { get; set; }
+    internal long TotalSize { get; set; } = 1;
+    internal string Prototype { get; set; } = string.Empty;
+    internal Var Fill { get; set; } = StringVar.Null();
+    internal List<long> LowerBounds { get; } = [];
+    internal List<long> Multipliers { get; } = [];
+    internal List<long> UpperBounds { get; } = [];
+    internal List<bool> ExplicitLower { get; } = [];
+
+    #endregion
+
+    #region Strategy Instances (Lazy-loaded singletons for performance)
+
+    private static readonly ArrayArithmeticStrategy _arithmeticStrategy = new();
+    private static readonly ArrayComparisonStrategy _comparisonStrategy = new();
+    private static readonly ArrayConversionStrategy _conversionStrategy = new();
+    private static readonly ArrayCloningStrategy _cloningStrategy = new();
+    private static readonly ArrayFormattingStrategy _formattingStrategy = new();
+
+    protected override IArithmeticStrategy ArithmeticStrategy => _arithmeticStrategy;
+    protected override IComparisonStrategy ComparisonStrategy => _comparisonStrategy;
+    protected override IConversionStrategy ConversionStrategy => _conversionStrategy;
+    protected override ICloningStrategy CloningStrategy => _cloningStrategy;
+    protected override IFormattingStrategy FormattingStrategy => _formattingStrategy;
+
+    #endregion
+
+    #region Array-Specific Methods
+
+                            internal int ConfigurePrototype(string prototype, Var fill)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(prototype);
+        ArgumentNullException.ThrowIfNull(fill);
+
+        Fill = fill;
+        var prototypeSpan = prototype.AsSpan();
+
+        while (prototypeSpan.Length > 0)
+        {
+            var match = CompiledRegex.ArrayPrototypePattern().Match(prototypeSpan.ToString());
+            if (!match.Success)
+                return 65; // Invalid prototype syntax
+
+            prototypeSpan = prototypeSpan[match.Length..];
+
+            if (!TryParseDimensionBounds(match, out var lower, out var upper, out var errorCode, out var hasExplicitLower))
+                return errorCode;
+
+            var dimensionSize = upper - lower + 1;
+            // Zero-length allowed only with explicit lower:upper syntax (e.g. ARRAY('1:0')).
+            // Simple form ARRAY(0) or a bare-0 dimension must still fail with error 67.
+            if (dimensionSize < 0 || (dimensionSize == 0 && !hasExplicitLower))
+                return 67;
+
+            LowerBounds.Insert(0, lower);
+            UpperBounds.Insert(0, upper);
+            ExplicitLower.Insert(0, hasExplicitLower);
+            Dimensions++;
+            Sizes.Insert(0, dimensionSize);
+        }
+
+        // Validate we have at least one dimension
+        if (Dimensions == 0)
+            return 67; // Array must have at least one dimension
+
+        return InitializeArrayData();
+    }
+
+            
+    private static bool TryParseDimensionBounds(System.Text.RegularExpressions.Match match, out long lower, out long upper, out int errorCode, out bool hasExplicitLower)
+    {
+        lower = 1;
+        upper = 0;
+        errorCode = 0;
+        hasExplicitLower = false;
+
+        if (match.Groups[3].Success)
+        {
+            hasExplicitLower = true;
+            // Format: "lower:upper"
+            if (!ToInteger(match.Groups[1].ValueSpan, out lower))
+            {
+                errorCode = 65; // Invalid lower bound
+                return false;
+            }
+
+            if (!ToInteger(match.Groups[3].ValueSpan, out upper))
+            {
+                errorCode = 66; // Invalid upper bound
+                return false;
+            }
+        }
+        else
+        {
+            // Format: "upper" (assumes lower = 1)
+            if (!ToInteger(match.Groups[1].ValueSpan, out upper))
+            {
+                errorCode = 67; // Invalid dimension size
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+                private int InitializeArrayData()
+    {
+        var dimensions = (int)Dimensions;
+
+        // Pre-allocate lists with known capacity
+        Multipliers.Capacity = dimensions;
+
+        // Calculate multipliers for index conversion
+        Multipliers.Add(1);
+        for (var j = 0; j < dimensions - 1; ++j)
+        {
+            var nextMultiplier = Multipliers[j] * Sizes[j];
+            Multipliers.Add(nextMultiplier);
+        }
+
+        TotalSize = Multipliers[dimensions - 1] * Sizes[dimensions - 1];
+
+        // Validate total size to prevent memory issues
+        if (TotalSize > int.MaxValue)
+            return 67; // Array too large
+
+        var totalSize = (int)TotalSize;
+
+        // Pre-allocate array data with exact capacity
+        Data = new List<Var>(totalSize);
+
+        // Fill array efficiently - avoid repeated property access
+        for (var i = 0; i < totalSize; i++)
+            Data.Add(Fill);
+
+        // Build human-readable prototype string
+        BuildPrototypeString();
+
+        return 0;
+    }
+
+                private void BuildPrototypeString()
+    {
+        var dimensions = (int)Dimensions;
+
+        // Emit "lower:upper" if explicit lo:hi was given, else just upper bound (the size)
+        string FormatDim(int d) {
+            var lower = LowerBounds[d];
+            var upper = UpperBounds[d];
+            return ExplicitLower[d] ? $"{lower}:{upper}" : upper.ToString();
+        }
+
+        if (dimensions == 1)
+        {
+            Prototype = FormatDim(0);
+            return;
+        }
+
+        var parts = new string[dimensions];
+        for (var d = dimensions - 1; d >= 0; --d)
+        {
+            parts[dimensions - 1 - d] = FormatDim(d);
+        }
+        Prototype = string.Join(',', parts);
+    }
+
+                    
+    internal long Index(List<long> indices)
+    {
+        ArgumentNullException.ThrowIfNull(indices);
+
+        var dimensions = (int)Dimensions;
+        if (indices.Count != dimensions)
+            throw new ArgumentException(@$"Expected {dimensions} indices but got {indices.Count}", nameof(indices));
+
+        long key = 0;
+
+        // Unroll small dimension counts for performance
+        switch (dimensions)
+        {
+            case 1:
+                return (indices[0] - LowerBounds[0]) * Multipliers[0];
+            case 2:
+                return (indices[0] - LowerBounds[0]) * Multipliers[0] +
+                       (indices[1] - LowerBounds[1]) * Multipliers[1];
+            case 3:
+                return (indices[0] - LowerBounds[0]) * Multipliers[0] +
+                       (indices[1] - LowerBounds[1]) * Multipliers[1] +
+                       (indices[2] - LowerBounds[2]) * Multipliers[2];
+            default:
+                // General case for N dimensions
+                for (var i = 0; i < dimensions; ++i)
+                {
+                    key += (indices[i] - LowerBounds[i]) * Multipliers[i];
+                }
+                return key;
+        }
+    }
+
+            
+    internal Var GetElement(List<long> indices)
+    {
+        var index = Index(indices);
+        if (index < 0 || index >= Data.Count)
+            throw new ArgumentOutOfRangeException(nameof(indices), "Computed index is out of bounds");
+
+        return Data[(int)index];
+    }
+
+            
+    internal void SetElement(List<long> indices, Var value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+
+        var index = Index(indices);
+        if (index < 0 || index >= Data.Count)
+            throw new ArgumentOutOfRangeException(nameof(indices), "Computed index is out of bounds");
+
+        Data[(int)index] = value;
+    }
+
+    #endregion
+
+    #region Double Dispatch Methods
+
+    // Arrays don't support arithmetic operations with other types
+
+
+    protected internal override Var AddInteger(IntegerVar left, Executive executive)
+        => LogArithmeticTypeError(executive, 2); // RightPattern operand of + is not numeric
+
+
+    protected internal override Var AddReal(RealVar left, Executive executive)
+        => LogArithmeticTypeError(executive, 2); // RightPattern operand of + is not numeric
+
+
+    protected internal override Var SubtractInteger(IntegerVar left, Executive executive)
+        => LogArithmeticTypeError(executive, 33); // RightPattern operand of - is not numeric
+
+
+    protected internal override Var SubtractReal(RealVar left, Executive executive)
+        => LogArithmeticTypeError(executive, 33); // RightPattern operand of - is not numeric
+
+
+    protected internal override Var MultiplyInteger(IntegerVar left, Executive executive)
+        => LogArithmeticTypeError(executive, 27); // RightPattern operand of * is not numeric
+
+
+    protected internal override Var MultiplyReal(RealVar left, Executive executive)
+        => LogArithmeticTypeError(executive, 27); // RightPattern operand of * is not numeric
+
+
+    protected internal override Var DivideInteger(IntegerVar left, Executive executive)
+        => LogArithmeticTypeError(executive, 13); // RightPattern operand of / is not numeric
+
+
+    protected internal override Var DivideReal(RealVar left, Executive executive)
+        => LogArithmeticTypeError(executive, 13); // RightPattern operand of / is not numeric
+
+    #endregion
+}

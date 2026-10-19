@@ -1,12 +1,12 @@
-# <center>SNOBOL4.NET</center>
+# <center>BolSno</center>
 
 A compiler for the SNOBOL4 language written in C# and .NET and runs under Windows, Linux, and Mac OS.
 
 A major goal of the project was to implement SNOBOL4 and the SPITBOL extensions using a high-level language that is readable and safe. Another goal was to match SPITBOL functionality as described in Emmer and Quillen's *MACRO SPITBOL: The High-Performance SNOBOL4 Language*, otherwise noted as "the SPITBOL manual".
 
-As a rule, any statement about SPITBOL in the SPITBOL manual, applies to SNOBOL4.NET. Original SNOBOL4 and SNOBOL4+ features not supported by SPITBOL are not implemented in SNOBOL4.NET. Extensions that differ in their implementation from SPITBOL are outlined in this document. 
+As a rule, any statement about SPITBOL in the SPITBOL manual, applies to BolSno. Original SNOBOL4 and SNOBOL4+ features not supported by SPITBOL are not implemented in BolSno. Extensions that differ in their implementation from SPITBOL are outlined in this document. 
 
-One major difference is that SNOBOL4.NET is slower than SPITBOL. This is the trade-off of using a high level language and safe programming practices. Hopefully, people will find the source code readable, and some will improve the code for readability and speed.
+One major difference is that BolSno is slower than SPITBOL. This is the trade-off of using a high level language and safe programming practices. Hopefully, people will find the source code readable, and some will improve the code for readability and speed.
 
 That said, performance is a continuous focus. A threaded-code JIT compiles hot statement paths to MSIL delegates at runtime. Current benchmarks, Release build, .NET 10, Linux x64:
 
@@ -27,7 +27,7 @@ That said, performance is a continuous focus. A threaded-code JIT compiles hot s
 
 [Replace with:]
 
-This manual covers the .NET implementation of SNOBOL4 and the SPITBOL extensions. SNOBOL4.NET runs on Windows, Linux, and Mac OS.
+This manual covers the .NET implementation of SNOBOL4 and the SPITBOL extensions. BolSno runs on Windows, Linux, and Mac OS.
 
 **Test coverage: 1,874 / 1,876 tests passing. Zero failures.** (2 skipped — require native `.so` on Linux only.) The full SNOBOL4/SPITBOL corpus of 106 programs passes across all 11 language rungs: output, assignment, arithmetic, control flow, patterns, capture, strings, keywords/predicates, functions/recursion, and aggregate types (ARRAY/TABLE/DATA).
 
@@ -39,21 +39,21 @@ This manual covers the .NET implementation of SNOBOL4 and the SPITBOL extensions
 
 The Windows version consist of three files:
 
-* Snobol4.exe
-* Snobol4W.exe
+* BolSno.exe
+* BolSnoW.exe
 * Snobol.Common.dll
 
-These three files should be stored in the same folder and the folder placed anywhere accessible from the search path. Snobol4.exe is the command line version and Snobol4W is the Windows version. Snobol4.Common.dll is the code in common with both.
+These three files should be stored in the same folder and the folder placed anywhere accessible from the search path. BolSno.exe is the command line version and BolSnoW is the Windows version. BolSno.Common.dll is the code in common with both.
 
 ### Linux and macOS
 
 On Linux and macOS, only the command-line runner is available. Build from source with the .NET 10 SDK:
 
 ```bash
-dotnet build Snobol4.sln -c Release -p:EnableWindowsTargeting=true
+dotnet build BolSno.sln -c Release -p:EnableWindowsTargeting=true
 ```
 
-The `snobol4` binary is in `Snobol4/bin/Release/net10.0/`. Add it to your PATH. Requires .NET 10 runtime.
+The `snobol4` binary is in `BolSno/bin/Release/net10.0/`. Add it to your PATH. Requires .NET 10 runtime.
 
 ### Installing SPITBOL
 
@@ -93,9 +93,9 @@ The `-w` switch saves the compiled program as a `.dll` assembly that can be relo
 
 * INPUT() and OUTPUT() functions.
 
-In SPITBOL the arguments are INPUT(.Variable, Channel, "filename[options]) and the same for OUTPUT(). In SNOBOL4.NET, a third object is the file mode option, a fourth argument is the file share option, and a fifth argument for OUTPUT controls whether an end of line is printed. If 0 (the default), an end of line is printed. If non-zero, an end of line is not printed. If options are not used, INPUT() and OUTPUT() function identically between SNOBOL4.NET and SPITBOL.
+In SPITBOL the arguments are INPUT(.Variable, Channel, "filename[options]) and the same for OUTPUT(). In BolSno, a third object is the file mode option, a fourth argument is the file share option, and a fifth argument for OUTPUT controls whether an end of line is printed. If 0 (the default), an end of line is printed. If non-zero, an end of line is not printed. If options are not used, INPUT() and OUTPUT() function identically between BolSno and SPITBOL.
 
-In SNOBOL4.NET, fixed length records are not supported due to conflicts with UNICODE support.
+In BolSno, fixed length records are not supported due to conflicts with UNICODE support.
 
 File Mode Options: (Default is 4)
 
@@ -165,7 +165,7 @@ Patterns compose with concatenation (juxtaposition) and alternation (`|`). Condi
 
 ### External Functions
 
-SNOBOL4.NET supports loading external functions from .NET assemblies and native C shared libraries:
+BolSno supports loading external functions from .NET assemblies and native C shared libraries:
 
 ```snobol
 *  Load a C# function from a .NET assembly

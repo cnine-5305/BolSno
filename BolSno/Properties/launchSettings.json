@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "BolSno": {
+      "commandName": "Project",
+      "commandLineArgs": "-x -c \"C:\\Users\\jcooper\\Documents\\Visual Studio 2026\\SNOBOL4-dotnet\\TestBolSno\\1brc.sno\""
+    }
+  }
+}

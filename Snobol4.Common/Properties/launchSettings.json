@@ -1,9 +1,0 @@
-{
-  "profiles": {
-    "TestSnobol4": {
-      "commandName": "Project",
-      "nativeDebugging": true,
-      "environmentVariables": {}
-    }
-  }
-}

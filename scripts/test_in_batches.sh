@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# test_in_batches.sh -- run TestSnobol4 in batches of 100 tests, each in its own test host.
+# test_in_batches.sh -- run TestBolSno in batches of 100 tests, each in its own test host.
 #
 # Lon 2026-10-18: "You better be running tests in batches of 100." A whole-suite `dotnet test` intermittently hangs (once for ten
 # minutes, its testhost idle) or crashes its host, and one bad test then costs every result of the run. Here a batch that crashes or
@@ -15,7 +15,7 @@
 set -u
 cd "$(dirname "${BASH_SOURCE[0]}")/.." || exit 2
 size="${1:-100}"; secs="${BATCH_SECS:-300}"
-proj=TestSnobol4/TestSnobol4.csproj; dll=TestSnobol4/bin/Debug/net10.0/TestSnobol4.dll
+proj=TestBolSno/TestBolSno.csproj; dll=TestBolSno/bin/Debug/net10.0/TestBolSno.dll
 t="$(mktemp -d)"; trap 'rm -rf "$t"' EXIT
 
 dotnet build "$proj" -m:4 -v:q > "$t/build" 2>&1 || { tail -5 "$t/build"; echo "REFUSE(2): the test project does not build"; exit 2; }

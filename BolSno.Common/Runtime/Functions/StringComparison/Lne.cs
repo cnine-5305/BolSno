@@ -1,0 +1,33 @@
+﻿namespace BolSno.Common;
+
+//"lne first argument is not a string" /* 132 */,
+//"lne second argument is not a string" /* 133 */,
+
+public partial class Executive
+{
+    internal void LexicalNotEqual(List<Var> arguments)
+    {
+        var v0 = arguments[0];
+        var v1 = arguments[1];
+
+        if (!v0.Convert(VarType.STRING, out _, out var left, this))
+        {
+            LogRuntimeException(132);
+            return;
+        }
+
+        if (!v1.Convert(VarType.STRING, out _, out var right, this))
+        {
+            LogRuntimeException(133);
+            return;
+        }
+
+        if (string.CompareOrdinal((string)left, (string)right) == 0)
+        {
+            NonExceptionFailure();
+            return;
+        }
+
+        PredicateSuccess();
+    }
+}
